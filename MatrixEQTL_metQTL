@@ -1,0 +1,67 @@
+## Before using the following code below, you need to generate metabolic expression, gene expression data matrix information matrix, as well as the covariate.
+
+#!/usr/bin/Rscript
+
+rm(list=ls())
+
+library(peer)
+.libPaths("/mnt/data/R4.1_and_Rstudio/lib/R/library")
+library(data.table)
+library(MatrixEQTL)
+library(tidyverse)
+
+setwd("/share/public_data/met_survival/metQTL/new/CRC")
+useModel = modelLINEAR
+SNP_file_name = paste("ukb_metabolic_geno.txt")
+expression_file_name = paste("ukb_metabolic_disease_log.csv")
+covariates_file_name = paste("ukb_metabolic_disease_cov.csv")
+output_file_name = tempfile()
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile(SNP_file_name)
+gene = SlicedData$new()
+gene$fileDelimiter = ","
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 5000
+gene$LoadFile(expression_file_name)
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = ","
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$LoadFile(covariates_file_name)
+
+me = Matrix_eQTL_engine(
+  snps = snps,
+  gene = gene,
+  cvrt = cvrt,
+  output_file_name = output_file_name,
+  pvOutputThreshold = pvOutputThreshold,
+  useModel = useModel,
+  errorCovariance = errorCovariance,
+  verbose = TRUE,
+  pvalue.hist = TRUE,
+  min.pv.by.genesnp = FALSE,
+  noFDRsaveMemory = FALSE)
+  
+metQTL<-me$all$eqtls
+metQTL_p3<-metQTL[which(metQTL$pvalue<1e-3),]
+metQTL_fdr0.05<-metQTL[which(metQTL$FDR<0.05),]
+metabolism_249<-read.csv("metabolism_249.csv",header = T)
+metQTL<-merge(metQTL,metabolism_249,by.x="gene",by.y="FieldID",sort=F)
+metQTL_p3<-merge(metQTL_p3,metabolism_249,by.x="gene",by.y="FieldID",sort=F)
+metQTL_fdr0.05<-merge(metQTL_fdr0.05,metabolism_249,by.x="gene",by.y="FieldID",sort=F)
+
+write.table(metQTL,"disease_metQTL2_p0.05_2.txt",sep="\t",quote = F,row.names = F)
+write.table(metQTL_p3,"disease_metQTL2_p1e3_2.txt",sep="\t",quote = F,row.names = F)
+write.table(metQTL_fdr0.05,"disease_metQTL2_fdr0.05_2.txt",sep="\t",quote = F,row.names = F)
+dim(metQTL_fdr0.05)
